@@ -1,19 +1,19 @@
 """
-Lesson 3: The Autonomous Loop (Your First True Agent with Self-Correction)
--------------------------------------------------------------------------
-In Lesson 2, the AI called a single tool and stopped.
-In this lesson, you build an AUTONOMOUS AGENT that:
-  1. Tries an action (runs a broken script)
-  2. Catches the error message
-  3. Inspects the source code
-  4. Fixes the bug by rewriting the file
-  5. Verifies the fix by running it again!
+Lesson 3: The Autonomous ReAct Loop (Real-World Fintech Fraud Investigator)
+--------------------------------------------------------------------------
+In this real-world mini-project, you build an Autonomous Security & Fraud Agent.
+A customer reports an unauthorized charge on their credit card.
 
-This is the exact pattern behind coding agents like Cursor, Devin, and Copilot.
+The Agent must autonomously:
+  1. Look up customer profile & home location
+  2. Inspect recent transactions to spot anomalous/fraudulent charges
+  3. Freeze the compromised card to block further attacks
+  4. Issue a refund for the fraudulent transaction
+  5. Send the customer a confirmation email detailing the resolution
 """
 
 import os
-import subprocess
+import json
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -28,106 +28,118 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 
 # -------------------------------------------------------------
-# STEP 1: Create a sample broken Python file to test our agent
+# STEP 1: Simulated Company Databases (Banking System)
 # -------------------------------------------------------------
-TARGET_FILE = "broken_math.py"
+CUSTOMERS_DB = {
+    "alex.rivera@example.com": {
+        "id": "CUST_9821",
+        "name": "Alex Rivera",
+        "home_city": "Austin, TX",
+        "card_status": "ACTIVE",
+        "email": "alex.rivera@example.com"
+    }
+}
 
-with open(TARGET_FILE, "w") as f:
-    f.write('''# Intentional Buggy Script
-def calculate_discounted_total(prices, discount_rate):
-    # BUG: Typo in variable name (prices vs price_list) causes NameError!
-    subtotal = sum(price_list)
-    return subtotal * (1 - discount_rate)
-
-cart = [25.0, 50.0, 100.0]
-discount = 0.20
-print("Total after discount:", calculate_discounted_total(cart, discount))
-''')
-
-print(f"📁 Created '{TARGET_FILE}' with an intentional bug.")
-
+TRANSACTIONS_DB = {
+    "CUST_9821": [
+        {"tx_id": "TX_101", "merchant": "Whole Foods Market", "amount": 62.40, "location": "Austin, TX", "time": "2 hours ago"},
+        {"tx_id": "TX_102", "merchant": "Bouldin Creek Cafe", "amount": 7.25, "location": "Austin, TX", "time": "45 mins ago"},
+        {"tx_id": "TX_103", "merchant": "Global Tech Imports", "amount": 489.99, "location": "Lagos, Nigeria", "time": "15 mins ago"}
+    ]
+}
 
 # -------------------------------------------------------------
-# STEP 2: Define the Agent's Tools (Its "Hands")
+# STEP 2: Real-World Action Tools
 # -------------------------------------------------------------
 
-def run_python_script(filename: str) -> str:
-    """
-    Execute a python script and return its terminal output or error traceback.
-    Args:
-        filename: The path of the python file to run (e.g. 'broken_math.py').
-    """
-    print(f"\n⚙️  [ACTION] Running command: python {filename}...")
-    result = subprocess.run(["python3", filename], capture_output=True, text=True)
-    
-    if result.returncode == 0:
-        print("   ✅ Script executed successfully!")
-        return f"SUCCESS: Exit code 0.\nOutput:\n{result.stdout}"
-    else:
-        print("   ❌ Script failed! Passing traceback to agent...")
-        return f"FAILURE: Exit code {result.returncode}.\nError Traceback:\n{result.stderr}"
+def lookup_customer(email: str) -> str:
+    """Look up a customer record by their email address."""
+    print(f"\n⚙️  [ACTION 1: DB LOOKUP] Searching customer for email: '{email}'...")
+    customer = CUSTOMERS_DB.get(email.strip().lower())
+    if not customer:
+        return f"No customer found with email {email}."
+    return json.dumps(customer)
 
 
-def read_source_file(filename: str) -> str:
-    """
-    Read and return the complete source code of a file.
-    Args:
-        filename: The file path to read.
-    """
-    print(f"\n⚙️  [ACTION] Reading contents of {filename}...")
-    try:
-        with open(filename, "r") as f:
-            return f.read()
-    except Exception as e:
-        return f"Error reading file: {str(e)}"
+def get_recent_transactions(customer_id: str) -> str:
+    """Retrieve the recent card transactions for a customer ID."""
+    print(f"\n⚙️  [ACTION 2: TRANSACTION AUDIT] Fetching transaction log for: {customer_id}...")
+    txs = TRANSACTIONS_DB.get(customer_id)
+    if not txs:
+        return f"No recent transactions found for {customer_id}."
+    return json.dumps(txs)
 
 
-def write_source_file(filename: str, new_content: str) -> str:
-    """
-    Overwrite a file with updated source code.
-    Args:
-        filename: The file to overwrite.
-        new_content: The corrected Python code.
-    """
-    print(f"\n⚙️  [ACTION] Writing fixed code to {filename}...")
-    try:
-        with open(filename, "w") as f:
-            f.write(new_content)
-        return f"Successfully wrote new code to {filename}."
-    except Exception as e:
-        return f"Error writing file: {str(e)}"
+def freeze_card(customer_id: str, reason: str) -> str:
+    """Freeze a customer's credit card immediately to stop fraudulent charges."""
+    print(f"\n🚨 [ACTION 3: SECURITY ACTION] Freezing card for {customer_id}!")
+    print(f"   Reason: {reason}")
+    for cust in CUSTOMERS_DB.values():
+        if cust["id"] == customer_id:
+            cust["card_status"] = "FROZEN"
+            return f"SUCCESS: Card for {cust['name']} ({customer_id}) has been FROZEN."
+    return f"Customer {customer_id} not found."
+
+
+def issue_refund(transaction_id: str, amount: float, reason: str) -> str:
+    """Issue a full refund for an unauthorized or disputed transaction."""
+    print(f"\n💳 [ACTION 4: REFUND DISPATCHED] Refunding ${amount:.2f} for Transaction {transaction_id}...")
+    print(f"   Memo: {reason}")
+    return f"SUCCESS: Refund of ${amount:.2f} processed. Reference: REF_{transaction_id}_DONE."
+
+
+def send_customer_email(customer_id: str, subject: str, message_body: str) -> str:
+    """Send an official security notification email to the customer."""
+    print(f"\n✉️  [ACTION 5: NOTIFICATION SENT] Dispatching email to {customer_id}...")
+    print(f"   Subject: {subject}")
+    print(f"   Body Preview: {message_body[:100]}...")
+    return f"SUCCESS: Email sent to customer {customer_id}."
 
 
 # -------------------------------------------------------------
-# STEP 3: Create the Autonomous Agent Session
+# STEP 3: Configure the Autonomous Fraud Investigator Agent
 # -------------------------------------------------------------
 chat = client.chats.create(
     model="gemini-3.5-flash-lite",
     config=types.GenerateContentConfig(
-        tools=[run_python_script, read_source_file, write_source_file],
+        tools=[
+            lookup_customer,
+            get_recent_transactions,
+            freeze_card,
+            issue_refund,
+            send_customer_email
+        ],
         system_instruction=(
-            "You are an autonomous software debugging agent.\n"
-            "Your workflow when fixing code:\n"
-            "1. Run the script first to see the exact error.\n"
-            "2. Read the source code to locate the bug.\n"
-            "3. Write the corrected code to the file.\n"
-            "4. Run the script again to VERIFY that it now passes with zero errors.\n"
-            "Do not stop until the script runs cleanly!"
+            "You are an autonomous Fintech Fraud & Security Operations Agent.\n"
+            "When a customer reports suspicious activity:\n"
+            "1. Look up the customer account by email.\n"
+            "2. Retrieve their recent transactions and compare locations & timestamps to find fraudulent activity.\n"
+            "3. If fraud is confirmed, freeze the credit card immediately to block further damage.\n"
+            "4. Issue a refund for the fraudulent charge.\n"
+            "5. Send the customer a clear notification email explaining that their card was secured and money refunded.\n"
+            "Execute all necessary actions autonomously before reporting your final summary."
         )
     )
 )
 
 # -------------------------------------------------------------
-# STEP 4: Give the Agent its Goal & Watch it Loop!
+# STEP 4: Real-World Inbound Ticket & Autonomous Resolution
 # -------------------------------------------------------------
-goal = f"Make '{TARGET_FILE}' run cleanly without any errors."
+incoming_ticket = (
+    "Help! I just got a mobile alert for an unfamiliar charge of almost $500 on my card. "
+    "I am currently sitting in Austin, TX and did not authorize this purchase! "
+    "Please help! - Alex Rivera (alex.rivera@example.com)"
+)
 
-print(f"\n🎯 AGENT GOAL: {goal}")
-print("🤖 Starting the Autonomous Agent loop...\n" + "=" * 50)
+print("=" * 65)
+print("📥 INCOMING SUPPORT TICKET:")
+print(f"'{incoming_ticket}'")
+print("=" * 65)
+print("🤖 Starting Autonomous Fraud Agent Loop...\n")
 
-response = chat.send_message(goal)
+response = chat.send_message(incoming_ticket)
 
-print("\n" + "=" * 50)
-print("🏁 AGENT FINISHED:")
-print("=" * 50)
+print("\n" + "=" * 65)
+print("🏁 AGENT INCIDENT REPORT TO SUPERVISOR:")
+print("=" * 65)
 print(response.text)
