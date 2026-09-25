@@ -1,6 +1,7 @@
 # Environment variables and API keys (CRITICAL: Never commit .env!)
 .env
 .env*.local
+.env.example
 
 # Virtual environments
 env/
@@ -15,3 +16,9 @@ __pycache__/
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+# Untracked workspace files (only push lessons to repo)
+main.py
+AI_AGENT_DEVELOPER_SYLLABUS.md
+real_api_call.py
+stage2_tool_calling.py
